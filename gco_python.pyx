@@ -22,6 +22,7 @@ cdef extern from "GCoptimization.h":
         void setVerbosity(int level)
 
 cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
+    int f
     int w
     int h
     int n_labels
@@ -36,7 +37,7 @@ cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
     # offsets [:,0] row/y offset
     # offsets [:,1] col/x offset
 
-    __init__(int w_, int h_, int n_labels_, int* image_, int* offsets_, int* known_):
+    __init__(int f_, int w_, int h_, int n_labels_, int* image_, int* offsets_, int* known_):
         this.w = w_
         this.h = h_
         this.n_labels = n_labels_
