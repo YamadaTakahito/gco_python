@@ -26,3 +26,6 @@ pip-log.txt
 
 #Mr Developer
 .mr.developer.cfg
+*.so
+*.ppm
+gco_python.cpp
