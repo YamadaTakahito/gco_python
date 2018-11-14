@@ -12,87 +12,90 @@ cdef extern from "GCoptimization.h":
 
         GCoptimizationGridGraph(int width, int height, int n_labels)
         void setDataCost(int *)
-        void setSmoothCost(int *)
         void expansion(int n_iterations)
         void swap(int n_iterations)
-        void setSmoothCostVH(int* pairwise, int* V, int* H)
         void setSmoothCostFunctor(SmoothCostFunctor* f)
         void setLabelOrder(bool RANDOM_LABEL_ORDER)
         int whatLabel(int node)
         void setVerbosity(int level)
 
 cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
-    int f
-    int w
-    int h
+    int frame
+    int height
+    int width
+    int img_size
     int n_labels
-    int* image
+    int* imges
+    int* knowns
     int* offsets
-    int* known
-    
-    # Since I always get confused
-    # x+y*width = site label
-    # col + row * width 
-    # channel + (x + y*width) * 3
-    # offsets [:,0] row/y offset
-    # offsets [:,1] col/x offset
 
-    __init__(int f_, int w_, int h_, int n_labels_, int* image_, int* offsets_, int* known_):
-        this.w = w_
-        this.h = h_
+    __init__(int f_, int h_, int w_, int n_labels_, int* imges_, int* offsets_, int* knowns_):
+        this.frame = f_
+        this.height = h_
+        this.width = w_
+        this.img_size = h_ * w_
         this.n_labels = n_labels_
-        this.image = image_
+        this.imges = imges_
         this.offsets = offsets_
-        this.known = known_
+        this.knowns = knowns_
 
-    int imageIndexFromSubs(int x, int y, int c):
-        return c + (x + y *this.w) * 3
-
-    int is_known(int x, int y):
-        return this.known[x + y * this.w] == 1
-
-    int is_valid(int x, int y):
-        return x >=0 and x < this.w and y >= 0 and y < this.h and is_known(x,y)
+    int is_known(int f, int h, int w):
+        idx = f * this.img_size  + h * this.width + w
+        return this.knowns[idx] == 1
     
-    int compute_seam(int s, int l1, int l2):
-        cdef int x = s % this.w
-        cdef int y = (s - x) / this.w
-        
-        cdef int x1 = x + this.offsets[1 + 2 * l1]
-        cdef int y1 = y + this.offsets[0 + 2 * l1]
+    int is_fit(int f, int h, int w):
+        return f >= 0 and f < this.frame and h >= 0 and h < this.height and w >= 0 and w < this.width
 
-        cdef int x2 = x + this.offsets[1 + 2 * l2]
-        cdef int y2 = y + this.offsets[0 + 2 * l2]
+    int is_valid(int f, int h, int w):
+        return is_fit(f, h, w) and is_known(f, h, w)
+    
+    int compute_seam(int idx, int l1, int l2):
+        cdef rest_idx = idx % (this.img_size)
+        cdef int f = (idx - rest_idx) / this.img_size
+        cdef int w = rest_idx % (this.width)
+        cdef int h = (rest_idx - w) / this.width
+
+        cdef int f1 = f + this.offsets[0 + 2 * l1]
+        cdef int h1 = h + this.offsets[1 + 2 * l1]
+        cdef int w1 = w + this.offsets[2 + 2 * l1]
+
+        cdef int f2 = f + this.offsets[0 + 2 * l2]
+        cdef int h2 = h + this.offsets[1 + 2 * l2]
+        cdef int w2 = w + this.offsets[2 + 2 * l2]
         
         # for destination pixels that are not known, bail with 0 energy
         # since single site infinity handles it
-        if(not is_valid(x1,y1)):
+        if not is_valid(f1, h1, w1):
             return 0
-        if(not is_valid(x2,y2)):
+        if not is_valid(f2, h2, w2):
             return 0
             
-        cdef int c
-        cdef int res
-        cdef int t1
-        cdef int t2
-        res = 0
+        cdef int c # color
+        cdef int error
+        cdef int i1
+        cdef int i2
+        cdef int idx1 = f1 * (this.height * this.width * 3) + h1 * (this.width * 3) + w1 * 3
+        cdef int idx2 = f2 * (this.height * this.width * 3) + h2 * (this.width * 3) + w2 * 3
+        c = 0
+
         for c in range(3):
-            t1 = this.image[imageIndexFromSubs(x1,y1,c)]
-            t2 = this.image[imageIndexFromSubs(x2,y2,c)]
-            tmp = t1 - t2
-            res += tmp * tmp
-        return res
+            i1 = this.imges[idx1 + c]
+            i2 = this.imges[idx2 + c]
+            i_diff = i1 - i2
+            error += i_diff * i_diff
+        return error
     
     int compute(int s1, int s2, int l1, int l2):
         # ||I(s1 + l1) - I(s1 + l2)||^2 + ||I(s2 + l1) - I(s2 + l2)||^2
         if(l1 == l2): return 0
-        cdef int e1 = compute_seam(s1,l1,l2)
-        cdef int e2 = compute_seam(s2,l1,l2)
-        return e1 + e2
+        cdef int error1 = compute_seam(s1,l1,l2)
+        cdef int error2 = compute_seam(s2,l1,l2)
+        return error1 + error2
+
 
 def cut_inpaint(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
         np.ndarray[np.int32_t, ndim=2, mode='c'] offsets,
-        np.ndarray[np.int32_t, ndim=4, mode='c'] images,
+        np.ndarray[np.int32_t, ndim=4, mode='c'] imges,
         np.ndarray[np.int32_t, ndim=4, mode='c'] knowns,
         n_iter=5,
         algorithm='swap',
@@ -128,22 +131,21 @@ def cut_inpaint(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
             "Got: unary_cost: (%d, %d, %d), pairwise_cost: (%d, %d)"
             %(unary_cost.shape[0], unary_cost.shape[1], unary_cost.shape[2],
                 offsets.shape[0], offsets.shape[1]))
-    if images.shape[1] != unary_cost.shape[0] and images.shape[2] != unary_cost.shape[1]:
+    if imges.shape[1] != unary_cost.shape[0] and imges.shape[2] != unary_cost.shape[1]:
         raise ValueError("unaray_cost shape must much image shape")
-    if images.shape[3] != 3:
+    if imges.shape[3] != 3:
         raise ValueError("Image must be RGB")
-    if images.shape[0] != knowns.shape[0] and images.shape[1] != knowns.shape[1] and images.shape[2] != knowns.shape[2]:
+    if imges.shape[0] != knowns.shape[0] and imges.shape[1] != knowns.shape[1] and imges.shape[2] != knowns.shape[2]:
         raise ValueError("known shape must match image shape")
 
-    # everything is ROW major at this point x = col, y = row
-
-    cdef int h = unary_cost.shape[0]
-    cdef int w = unary_cost.shape[1]
+    cdef int frame = imges.shape[0]
+    cdef int height = imges.shape[1]
+    cdef int width = imges.shape[2]
     cdef int n_labels = offsets.shape[0]
 
-    cdef GCoptimizationGridGraph* gc = new GCoptimizationGridGraph(w, h, n_labels)
+    cdef GCoptimizationGridGraph* gc = new GCoptimizationGridGraph(width, height, n_labels)
     gc.setDataCost(<int*>unary_cost.data)
-    gc.setSmoothCostFunctor(<InpaintFunctor*>new InpaintFunctor(w, h, n_labels, <int*>images.data, <int*>offsets.data, <int*>knowns.data))
+    gc.setSmoothCostFunctor(<InpaintFunctor*>new InpaintFunctor(frame, height, width, n_labels, <int*>imges.data, <int*>offsets.data, <int*>knowns.data))
     if(randomizeOrder):
         print("Randomizing label order")
         gc.setLabelOrder(True)
@@ -157,10 +159,10 @@ def cut_inpaint(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
         raise ValueError("algorithm should be either `swap` or `expansion`. Got: %s" % algorithm)
 
     cdef np.npy_intp result_shape[2]
-    result_shape[0] = h
-    result_shape[1] = w
+    result_shape[0] = height
+    result_shape[1] = width
     cdef np.ndarray[np.int32_t, ndim=2] result = np.PyArray_SimpleNew(2, result_shape, np.NPY_INT32)
     cdef int * result_ptr = <int*>result.data
-    for i in xrange(w * h):
+    for i in xrange(width * height):
         result_ptr[i] = gc.whatLabel(i)
     return result

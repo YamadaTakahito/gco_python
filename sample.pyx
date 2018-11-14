@@ -138,8 +138,9 @@ def cut_inpaint(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
     if imges.shape[0] != knowns.shape[0] and imges.shape[1] != knowns.shape[1] and imges.shape[2] != knowns.shape[2]:
         raise ValueError("known shape must match image shape")
 
-    cdef int heghit = unary_cost.shape[0]
-    cdef int wwidth = unary_cost.shape[1]
+    cdef int frame = imges.shape[0]
+    cdef int height = imges.shape[1]
+    cdef int width = imges.shape[2]
     cdef int n_labels = offsets.shape[0]
 
     cdef GCoptimizationGridGraph* gc = new GCoptimizationGridGraph(width, height, n_labels)
