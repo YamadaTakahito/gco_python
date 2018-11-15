@@ -29,3 +29,5 @@ pip-log.txt
 *.so
 *.ppm
 gco_python.cpp
+gco3d_python.cpp
+*.npy

@@ -1,3 +1,6 @@
-import matplotlib.pyplot as plt
-import numpy as np
-from pygco import cut_simple, cut_from_graph
+import imageio
+
+img = imageio.imread('scene1.row3.col1.ppm')
+img1 = imageio.imread('scene1.row3.col2.ppm')
+
+print(img.shape, img1.shape)
