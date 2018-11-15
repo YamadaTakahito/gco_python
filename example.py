@@ -30,4 +30,4 @@ def other():
                                verbosity=1)
 
 
-other()
+my()
