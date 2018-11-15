@@ -87,6 +87,7 @@ cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
     
     int compute(int s1, int s2, int l1, int l2):
         # ||I(s1 + l1) - I(s1 + l2)||^2 + ||I(s2 + l1) - I(s2 + l2)||^2
+        print(s1, s2, l1, l2)
         if(l1 == l2): return 0
         cdef int error1 = compute_seam(s1,l1,l2)
         cdef int error2 = compute_seam(s2,l1,l2)
