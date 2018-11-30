@@ -56,20 +56,21 @@ cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
         cdef int w = rest_idx % (this.width)
         cdef int h = (rest_idx - w) / this.width
 
-        cdef int f1 = f + this.offsets[0 + 2 * l1]
-        cdef int h1 = h + this.offsets[1 + 2 * l1]
-        cdef int w1 = w + this.offsets[2 + 2 * l1]
+        cdef int f1 = f + this.offsets[0 + 3 * l1]
+        cdef int h1 = h + this.offsets[1 + 3 * l1]
+        cdef int w1 = w + this.offsets[2 + 3 * l1]
 
-        cdef int f2 = f + this.offsets[0 + 2 * l2]
-        cdef int h2 = h + this.offsets[1 + 2 * l2]
-        cdef int w2 = w + this.offsets[2 + 2 * l2]
-        
+        cdef int f2 = f + this.offsets[0 + 3 * l2]
+        cdef int h2 = h + this.offsets[1 + 3 * l2]
+        cdef int w2 = w + this.offsets[2 + 3 * l2]
+
+        # print(this.fraame, this.height, this.width)
         # for destination pixels that are not known, bail with 0 energy
         # since single site infinity handles it
         if not is_valid(f1, h1, w1):
-            return 0
+            return 100000
         if not is_valid(f2, h2, w2):
-            return 0
+            return 100000
             
         cdef int c # color
         cdef int error
@@ -79,6 +80,7 @@ cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
         cdef int idx2 = f2 * (this.height * this.width * 3) + h2 * (this.width * 3) + w2 * 3
         c = 0
 
+        # print(idx1, idx2)
         for c in range(3):
             i1 = this.imges[idx1 + c]
             i2 = this.imges[idx2 + c]
@@ -88,7 +90,6 @@ cdef cppclass InpaintFunctor(GCoptimizationGridGraph.SmoothCostFunctor):
     
     int compute(int s1, int s2, int l1, int l2):
         # ||I(s1 + l1) - I(s1 + l2)||^2 + ||I(s2 + l1) - I(s2 + l2)||^2
-        print(s1, s2, l1, l2)
         if(l1 == l2): return 0
         cdef int error1 = compute_seam(s1,l1,l2)
         cdef int error2 = compute_seam(s2,l1,l2)
@@ -141,6 +142,7 @@ def cut_inpaint(np.ndarray[np.int32_t, ndim=3, mode='c'] unary_cost,
         raise ValueError("known shape must match image shape")
 
     cdef int frame = imges.shape[0]
+    print(frame)
     cdef int height = imges.shape[1]
     cdef int width = imges.shape[2]
     cdef int n_labels = offsets.shape[0]

@@ -5,8 +5,8 @@ import numpy as np
 
 unary_cost = np.load('data/unary_cost.npy')
 d_offsets = np.load('data/d_offsets.npy')
-imges = np.load('data/imges.npy')[:1]
-masks = np.load('data/masks.npy')[:1]
+imges = np.load('data/imges.npy')
+masks = np.load('data/masks.npy')
 unary_cost = np.random.randint(60, size=(unary_cost.shape))
 
 
